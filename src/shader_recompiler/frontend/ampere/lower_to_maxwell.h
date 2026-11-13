@@ -3921,11 +3921,17 @@ inline LoweredProgram LowerToMaxwellWith(std::span<const Instruction> code, u32 
             if (complete) return finish(index);
             break;
         }
-        case 0x945: case 0x941: case 0x942: case 0x948: // (+ WARPSYNC)
+        case 0x945: case 0x941: case 0x942:
             // BSSY / BSYNC / BREAK only manage warp reconvergence: BSYNC waits for the other
             // threads and falls through, BREAK drops the thread from that wait. Eden runs threads
             // independently, so all three are no-ops (a SYNC would wrongly jump, and a branch
             // out of a lowered SSY region would leave its token on Eden's flow stack).
+            break;
+        case 0x948: // WARPSYNC
+            // Also orders the warp's shared memory accesses: compilers separate one lane's loads
+            // from another lane's stores to the same words with it (Orbitals' particle radix
+            // sort). Without a barrier the host compiler may move those stores above the loads.
+            emit(0xef98000000000000ULL | predicate); // MEMBAR.CTA
             break;
         case 0x947: { // BRA
             // The offset's two low bits: .DIV (2) branches when the warp has diverged, .CONV (3)
