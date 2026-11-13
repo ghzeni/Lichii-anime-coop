@@ -3713,6 +3713,27 @@ bool RasterizerVulkan::FrameDumpBuffers(bool compute, std::span<const u64> shade
             device_memory.ReadBlockUnsafe(binding.device_addr, buffer.guest.data(), size);
         }
     });
+    buffer_cache.ForEachBoundTextureBuffer(
+        compute, [&](u32 stage, u32 index, bool written, const auto& binding, const auto* host,
+                 u32 host_offset) {
+        const u32 size = std::min(binding.size, BUFFER_CAP);
+        FrameDump::BoundBuffer& buffer = buffers.emplace_back(FrameDump::BoundBuffer{
+            .stage = stage,
+            .storage = false,
+            .index = index,
+            .written = written,
+            .gpu_addr = binding.gpu_addr,
+            .device_addr = binding.device_addr,
+            .bound_size = binding.size,
+            .size = size,
+            .gpu_modified = buffer_cache.IsRegionGpuModified(binding.device_addr, size),
+            .host = host ? host->Handle() : VK_NULL_HANDLE,
+            .host_offset = host_offset,
+            .guest = std::vector<u8>(size),
+            .texel = true,
+        });
+        device_memory.ReadBlockUnsafe(binding.device_addr, buffer.guest.data(), size);
+    });
     return frame_dump.NoteBuffers(compute, shader_hashes, buffers);
 }
 

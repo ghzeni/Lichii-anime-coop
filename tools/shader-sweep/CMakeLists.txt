@@ -61,6 +61,11 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     # core needs frontend_common's play time manager, so it links after core
     target_link_libraries(shader-sweep PRIVATE video_core core frontend_common)
     target_compile_definitions(shader-sweep PRIVATE SHADER_SWEEP_V2)
+    if(WIN32)
+        # video_core headers pull in windows.h
+        target_compile_definitions(shader-sweep PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+        target_link_libraries(shader-sweep PRIVATE iphlpapi)
+    endif()
     if(LICHII_TESTS)
         find_package(Python3 REQUIRED COMPONENTS Interpreter)
         add_test(NAME shader-sweep-replay-v2

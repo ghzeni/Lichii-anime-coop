@@ -118,6 +118,9 @@ public:
         VkBuffer host;
         u32 host_offset;
         std::vector<u8> guest;
+        /// A texture buffer. Its host and guest bytes are recorded separately, so a stale upload
+        /// shows as a difference between the two.
+        bool texel = false;
     };
 
     explicit FrameDump(const Device& device, MemoryAllocator& memory_allocator,

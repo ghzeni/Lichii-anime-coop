@@ -471,8 +471,9 @@ bool FrameDump::NoteBuffers(bool compute, std::span<const u64> shader_hashes,
     for (BoundBuffer& buffer : buffers) {
         const size_t program = compute ? 0 : buffer.stage + 1;
         const u64 shader = program < shader_hashes.size() ? shader_hashes[program] : 0;
-        const std::tuple<u64, bool, u32, u64, u32> key{shader, buffer.storage, buffer.index,
-                                                       buffer.device_addr, buffer.size};
+        const std::tuple<u64, bool, u32, u64, u32> key{
+            shader, buffer.storage, buffer.texel ? 0x1000 + buffer.index : buffer.index,
+            buffer.device_addr, buffer.size};
         if (std::ranges::find(seen_buffers, key) != seen_buffers.end()) {
             continue;
         }
@@ -480,12 +481,19 @@ bool FrameDump::NoteBuffers(bool compute, std::span<const u64> shader_hashes,
         const std::string owner =
             compute ? fmt::format(R"("dispatch":{},"after_draws":{})", dispatches, draws)
                     : fmt::format(R"("pass":{},"draw":{})", pass_index, draws - 1);
-        const bool from_host = buffer.guest.empty();
-        std::string tags = fmt::format(
-            R"("kind":"buffer",{},"stage":{},"shader":"{:016x}","type":"{}","index":{},"written":{},"gpu_addr":"{:#x}","device_addr":"{:#x}","bound_size":{},"size":{},"gpu_modified":{},"source":"{}")",
-            owner, buffer.stage, shader, buffer.storage ? "storage" : "uniform", buffer.index,
-            buffer.written, buffer.gpu_addr, buffer.device_addr, buffer.bound_size, buffer.size,
-            buffer.gpu_modified, from_host ? "host" : "guest");
+        const bool from_host = buffer.guest.empty() || (buffer.texel && buffer.host);
+        const auto make_tags = [&](bool host_bytes) {
+            return fmt::format(
+                R"("kind":"buffer",{},"stage":{},"shader":"{:016x}","type":"{}","index":{},"written":{},"gpu_addr":"{:#x}","device_addr":"{:#x}","bound_size":{},"size":{},"gpu_modified":{},"source":"{}")",
+                owner, buffer.stage, shader,
+                buffer.texel ? "texel" : (buffer.storage ? "storage" : "uniform"), buffer.index,
+                buffer.written, buffer.gpu_addr, buffer.device_addr, buffer.bound_size,
+                buffer.size, buffer.gpu_modified, host_bytes ? "host" : "guest");
+        };
+        std::string tags = make_tags(from_host);
+        if (buffer.texel && from_host && !buffer.guest.empty()) {
+            Enqueue({.tags = make_tags(false), .data = std::move(buffer.guest), .raw = true});
+        }
         if (!from_host) {
             Enqueue({.tags = std::move(tags), .data = std::move(buffer.guest), .raw = true});
             continue;
